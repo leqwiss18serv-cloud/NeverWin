@@ -541,3 +541,23 @@ CI-прогон `NeverWin APK` run 36323103992 (тег v0.1.1): job `Analyze + t
 
 ### Результат
 - Фикс едет в main + тег v0.1.1 → контроль прогона и Release.
+
+---
+
+## AGENT 1: 27.09.2026, 23:45, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Прогон run 36342333482 (фикс 429): **completed / success** — analyze ✓,
+tests ✓, build ✓, release ✓. Release API: ассет `NeverWin.apk` обновлён
+(**56 053 136 байт, updated 19:00:03Z**).
+
+### Файлы
+- Изменён: `WORK.md` (эта запись).
+
+### Результат
+- Актуальный APK (с маппингом email-лимита и 60-секундным cooldown) в
+  Release 0.1.1. Четыре зелёных прогона подряд.
+- Для полного снятия 429 пользователю осталось одно действие в Dashboard:
+  **Authentication → Providers → Email → Confirm email = OFF**
+  (первопричина доказана тестом: `over_email_send_rate_limit`, 0 юзеров
+  в проекте). После этого регистрация сразу заработает, код к этому готов.
