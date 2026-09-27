@@ -1,0 +1,82 @@
+name: NeverWin APK
+
+on:
+  push:
+    tags:
+      - "v0.1.1"
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Create GitHub Release 0.1.1 with NeverWin.apk"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.44.0"
+  JAVA_VERSION: "17"
+
+jobs:
+  test:
+    name: Analyze + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  build-apk:
+    name: Build NeverWin.apk
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release --build-name 0.1.1 --build-number 1
+      - run: cp build/app/outputs/flutter-apk/app-release.apk NeverWin.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NeverWin-apk
+          path: NeverWin.apk
+
+  release:
+    name: Release 0.1.1
+    needs: build-apk
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NeverWin-apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.1
+          name: NeverWin 0.1.1
+          body: |
+            NeverWin 0.1.1 — первая часть: аккаунты (5000 NC на старте), 4 игры,
+            банк со счетами и переводами, промокоды, лидерборд ТОП-10, друзья,
+            мессенджер, дуэли, настройки, админ-панель, Supabase RPC-схема.
+            Валюта NC полностью виртуальная.
+          files: NeverWin.apk
+          draft: false
+          prerelease: false
