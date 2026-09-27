@@ -245,7 +245,7 @@ class BalanceHeader extends StatelessWidget {
                 width: 46,
                 height: 46,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(

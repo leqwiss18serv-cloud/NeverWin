@@ -265,7 +265,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                   ),
                   IconButton(
                     icon: const Icon(Icons.sports_esports_rounded,
-                        color: NeverWinTheme.goldGradient.colors.first),
+                        color: Color(0xFFFFD76A)),
                     tooltip: 'Вызвать на дуэль',
                     onPressed: () => _challenge(f),
                   ),
@@ -625,16 +625,12 @@ class _ChatPageState extends State<ChatPage> {
                                               .startsWith('http')
                                           ? Image.network(
                                               m.imagePath!,
-                                              errorBuilder: (_,
-                                                      __,
-                                                      ___) =>
+                                              errorBuilder: (_, _, _) =>
                                                   const Icon(Icons
                                                       .broken_image_rounded))
                                           : Image.file(
                                               File(m.imagePath!),
-                                              errorBuilder: (_,
-                                                      __,
-                                                      ___) =>
+                                              errorBuilder: (_, _, _) =>
                                                   const Icon(Icons
                                                       .broken_image_rounded)),
                                     ),

@@ -14,14 +14,14 @@ class SupabaseBackend implements GameBackend {
 
   static bool _ready = false;
   static String? url;
-  static String? anonKey;
+  static String? publishableKey;
 
   static bool get isReady => _ready;
 
-  static Future<void> init(String supabaseUrl, String supabaseAnonKey) async {
+  static Future<void> init(String supabaseUrl, String supabaseKey) async {
     url = supabaseUrl;
-    anonKey = supabaseAnonKey;
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    publishableKey = supabaseKey;
+    await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
     _ready = true;
   }
 

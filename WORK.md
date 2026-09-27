@@ -329,3 +329,49 @@ repo+workflow; значения ключей в журнал НЕ записыв
 ### Публикация
 - Push main + v0.1.1: OK. Release 0.1.1 + APK — автоматически по завершении
   workflow (контроль ниже отдельной записью).
+
+---
+
+## AGENT 1: 27.09.2026, 19:05, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+CI-прогон `NeverWin APK` run 36323103992 (тег v0.1.1): job `Analyze + tests`
+упал на `flutter analyze` — **62 уникальные ошибки** (59×
+`lib/backend/local_backend.dart`, 2× `lib/state/app_state.dart`, 1×
+`lib/screens/friends_screen.dart`). Локальный анализатор в песочнице виснет,
+поэтому ошибки получены из логов Actions (job 108630616133) и исправлены.
+
+### Реализация (первопричины, не симптомы)
+- 58× `undefined_getter` ('id'/'nickname'/'balance' на `Map<String,dynamic>`):
+  `_requireUser()` возвращал сырой Map, а вызывающий код использовал точечный
+  доступ `me.id`/`me.nickname`/`me.balance`. Исправлено типом, а не кастами в
+  50 местах: `_requireUser` теперь возвращает типизированную запись
+  `({String id, String nickname, int balance})` — все call sites компилируются
+  со статической проверкой.
+- 1× `argument_type_not_assignable` (local_backend.dart:335): `_roll*`-функции
+  принимали сырой `Map cfg`, который передавался в `_mult(Map<String,dynamic>)`.
+  Сигнатуры `_rollHigherLower/_rollBlackWhite/_rollDice/_rollCoin` уточнены до
+  `Map<String, dynamic>`.
+- 2× `return_of_invalid_type_from_closure` (app_state.dart:61,161): `_safe<T>`
+  требовал `Future<T> Function()`, а `currentSession()` возвращает
+  `Future<PlayerProfile?>`. Сигнатура обобщена:
+  `Future<T?> _safe<T extends Object>(Future<T?> Function() fn)`.
+- 1× `const_eval_property_access` (friends_screen.dart:268):
+  `goldGradient.colors.first` в const-контексте `Icon` — заменено на
+  литерал `Color(0xFFFFD76A)`.
+- Попутно: `Supabase.initialize(anonKey:)` → `publishableKey:` (deprecated info
+  из того же лога; параметр подсказан самим анализатором, значит есть в
+  резолвлённой версии пакета); `errorBuilder: (_, __, ___)` →
+  `(_, _, _)` (infos unnecessary_underscores).
+
+### Файлы
+- Изменены: `lib/backend/local_backend.dart`, `lib/state/app_state.dart`,
+  `lib/screens/friends_screen.dart`, `lib/backend/supabase_backend.dart`,
+  `lib/widgets/glass.dart`, `lib/screens/auth_screen.dart`, `WORK.md`.
+
+### SQL
+- Без изменений.
+
+### Результат
+- Ожидается повторный прогон workflow после push (тег v0.1.1 переставлен на
+  новый HEAD, т.к. триггер релиза — push тега).

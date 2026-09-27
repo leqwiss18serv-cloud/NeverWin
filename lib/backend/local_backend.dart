@@ -93,7 +93,10 @@ class LocalBackend implements GameBackend {
   Future<String?> _sessionNick(SharedPreferences p) async =>
       p.getString(_kSession);
 
-  Future<Map<String, dynamic>> _requireUser(SharedPreferences p) async {
+  /// Session snapshot: typed record so call sites use `me.id` / `me.nickname`
+  /// / `me.balance` with full static safety.
+  Future<({String id, String nickname, int balance})> _requireUser(
+      SharedPreferences p) async {
     final nick = await _sessionNick(p);
     if (nick == null) throw const NeverWinException('Нет активной сессии');
     final users = _decodeMap(p.getString(_kUsers));
@@ -104,7 +107,11 @@ class LocalBackend implements GameBackend {
     if (until != null && DateTime.parse(until).isAfter(DateTime.now())) {
       throw NeverWinException('Аккаунт заблокирован до $until');
     }
-    return map;
+    return (
+      id: map['id'] as String,
+      nickname: map['nickname'] as String,
+      balance: map['balance'] as int,
+    );
   }
 
   PlayerProfile _toProfile(Map<String, dynamic> u) => PlayerProfile(
@@ -258,7 +265,7 @@ class LocalBackend implements GameBackend {
       });
 
   GameResult _rollHigherLower(
-      String choice, int bet, Map cfg, bool gx, int gxMult) {
+      String choice, int bet, Map<String, dynamic> cfg, bool gx, int gxMult) {
     if (choice != 'higher' && choice != 'lower') {
       throw const NeverWinException('Выбери «Больше» или «Меньше»');
     }
@@ -315,7 +322,7 @@ class LocalBackend implements GameBackend {
   }
 
   GameResult _rollBlackWhite(
-      String choice, int bet, Map cfg, bool gx, int gxMult) {
+      String choice, int bet, Map<String, dynamic> cfg, bool gx, int gxMult) {
     if (choice != 'black' && choice != 'white') {
       throw const NeverWinException('Выбери «Чёрное» или «Белое»');
     }
@@ -348,7 +355,8 @@ class LocalBackend implements GameBackend {
     );
   }
 
-  GameResult _rollDice(String choice, int bet, Map cfg, bool gx, int gxMult) {
+  GameResult _rollDice(String choice, int bet, Map<String, dynamic> cfg,
+      bool gx, int gxMult) {
     if (choice != 'even' && choice != 'odd') {
       throw const NeverWinException('Выбери «Чёт» или «Нечет»');
     }
@@ -369,7 +377,8 @@ class LocalBackend implements GameBackend {
     );
   }
 
-  GameResult _rollCoin(String choice, int bet, Map cfg, bool gx, int gxMult) {
+  GameResult _rollCoin(String choice, int bet, Map<String, dynamic> cfg,
+      bool gx, int gxMult) {
     if (choice != 'heads' && choice != 'tails') {
       throw const NeverWinException('Выбери «Орёл» или «Решка»');
     }

@@ -66,7 +66,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<T?> _safe<T>(Future<T> Function() fn) async {
+  Future<T?> _safe<T extends Object>(Future<T?> Function() fn) async {
     try {
       return await fn();
     } catch (_) {

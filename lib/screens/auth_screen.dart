@@ -68,7 +68,7 @@ class _AuthScreenState extends State<AuthScreen>
                       width: 130,
                       height: 130,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, _, _) => const Icon(
                           Icons.videogame_asset_rounded,
                           size: 90,
                           color: NeverWinTheme.skyBlue),
