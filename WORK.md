@@ -276,3 +276,56 @@ Remote переключён на `https://github.com/leqwiss18serv/NeverWin.git`
 ### Результат / Публикация
 - Статус: всё готово локально (коммиты `e76ab15`, `eeaed41`, тег `v0.1.1`,
   remote `leqwiss18serv/NeverWin`, workflow). Жду свежий токен от пользователя.
+
+---
+
+## AGENT 1: 27.09.2026, 18:40, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Пользователь передал данные: Supabase-проект `NeverWin`
+(`ditgqxuliroodvfnlshl`, eu-central-1, URL + publishable/secret keys) и рабочий
+GitHub PAT (проверен: `GET /user` → 200, логин `leqwiss18serv-cloud`, scopes
+repo+workflow; значения ключей в журнал НЕ записываются).
+
+### Реализация
+- Создан `lib/backend/supabase_config.dart` с URL проекта и **publishable**
+  ключом (ключи такого типа предназначены для клиентских приложений; RLS+RPC
+  защищают деньги; secret-ключ нигде в репо не хранится).
+- `AppState.boot()`: если своих URL/key в Настройках нет — авто-инициализация
+  Supabase из вшитых значений + sanity-проверка `getConfig()`; при любой ошибке
+  (нет сети, схема не применена) — откат на `LocalBackend`. Приложение работает
+  из коробки и само переключается на сервер после применения схемы.
+- GitHub: репозиторий найден — **`leqwiss18serv-cloud/NeverWin`** (public,
+  создан сегодня, был только Initial commit). Remote переключён на него.
+  `fetch` → коммит Supabase-изменений (`80df7cc`) → `pull --rebase` (конфликт
+  add/add в README.md — оставлен наш README как единственно содержательный) →
+  тег `v0.1.1` переставлен на новый HEAD → **push main + push v0.1.1 выполнены**.
+  Токен из remote URL после пуша удалён (remote снова чистый https).
+- Supabase-диагностика (без секретов): `auth/v1/health` → 200 (GoTrue
+  v2.197.0, проект жив, ключ принимается); `rest/v1/game_config` → **404**
+  (таблицы нет — схема ещё не применена). Применить DDL удалённо нечем:
+  Management API PAT владельца нет, пароля БД нет — схема применяется
+  пользователем вручную в Dashboard → SQL Editor (файл `supabase/schema.sql`
+  целиком). До этого приложение работает в локальном режиме.
+- Actions: push тега запустил workflow **`NeverWin APK` run 36323103992**
+  (event push, ветка/тег v0.1.1, статус на момент записи — in_progress):
+  test → build apk --release → Release 0.1.1 + `NeverWin.apk`.
+
+### Файлы
+- Создан: `lib/backend/supabase_config.dart`.
+- Изменены: `lib/state/app_state.dart` (автоконнект), `WORK.md`.
+- Коммиты запушены: `7743d29`, `21e14de`, `a6c3cf3`, `5947d55`, `80df7cc`
+  (+ Initial commit `835e3a5` из GitHub). Тег `v0.1.1` — на `80df7cc`.
+
+### SQL
+- Без изменений кода схемы; применение `supabase/schema.sql` — ручной шаг
+  пользователя в SQL Editor (см. выше).
+
+### Результат
+- Код и тег опубликованы в `leqwiss18serv-cloud/NeverWin`, сборка APK идёт в
+  Actions. Работа AGENT 2 не затронута (в репозитории NeverWin её нет;
+  домашний репозиторий не трогался).
+
+### Публикация
+- Push main + v0.1.1: OK. Release 0.1.1 + APK — автоматически по завершении
+  workflow (контроль ниже отдельной записью).
