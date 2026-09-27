@@ -452,3 +452,33 @@ CI-прогон `NeverWin APK` run 36323103992 (тег v0.1.1): job `Analyze + t
 ### Результат
 - Фикс едет в main + тег v0.1.1 переставляется (релизный APK должен содержать
   актуальный код) → контроль зелёного прогона и обновлённого Release ниже.
+
+---
+
+## AGENT 1: 27.09.2026, 23:20, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+1. Прогон run 36339761921 (фикс 429): **completed / success**. Release API:
+   `NeverWin 0.1.1`, ассет `NeverWin.apk` обновлён (55 944 612 байт,
+   updated 18:18:03Z) — релизный APK содержит фикс 429.
+2. По просьбе пользователя: **иконка приложения заменена на логотип**.
+   Сгенерированы mipmap-иконки из `assets/logo/neverwin_logo.png` (1254×1254):
+   mdpi 48, hdpi 72, xhdpi 96, xxhdpi 144, xxxhdpi 192 (center-crop квадрат,
+   LANCZOS, RGBA) — перезаписаны
+   `android/app/src/main/res/mipmap-*/ic_launcher.png` (старые плейсхолдеры
+   442–1443 байт). `android:icon="@mipmap/ic_launcher"` в манифесте уже
+   указывал на них — правок манифеста не потребовалось.
+
+### Реализация
+- Ресайз выполнен локально через PIL (без новых pub-зависимостей и без
+  flutter_launcher_icons — детерминированно, без риска для CI).
+- Иконка едет в main + тег v0.1.1 переставляется → контроль прогона и Release.
+
+### Файлы
+- Изменены: 5× `android/app/src/main/res/mipmap-*/ic_launcher.png`, `WORK.md`.
+
+### SQL
+- Без изменений.
+
+### Результат
+- Ожидается прогон workflow; после success — проверка обновлённого ассета.
