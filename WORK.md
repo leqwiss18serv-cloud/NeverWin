@@ -482,3 +482,23 @@ CI-прогон `NeverWin APK` run 36323103992 (тег v0.1.1): job `Analyze + t
 
 ### Результат
 - Ожидается прогон workflow; после success — проверка обновлённого ассета.
+
+---
+
+## AGENT 1: 27.09.2026, 23:35, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Прогон run 36340431575 (иконка): **completed / success**. Release API:
+ассет `NeverWin.apk` обновлён — **56 053 136 байт, updated 18:29:56Z**
+(предыдущая сборка 55 944 612 байт). Релизный APK содержит и фикс 429,
+и иконку-логотип.
+
+### Файлы
+- Изменён: `WORK.md` (эта запись).
+
+### Результат
+- NeverWin 0.1.1 полностью опубликован: код + тег v0.1.1 в
+  `leqwiss18serv-cloud/NeverWin`, зелёный CI, Release + актуальный APK.
+- Открытый пункт (вне кода, действие пользователя): однократно выполнить
+  `supabase/schema.sql` в SQL Editor + выключить Confirm email в
+  Authentication → Providers → Email (адреса `neverwin.local` фейковые).
