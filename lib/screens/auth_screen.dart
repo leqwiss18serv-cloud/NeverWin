@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,17 +23,47 @@ class _AuthScreenState extends State<AuthScreen>
   final _pass = TextEditingController();
   final _pass2 = TextEditingController();
   bool _obscure = true;
+  DateTime? _coolUntil; // client-side 60s cooldown after a 429
+  Timer? _coolTimer;
+
+  int get _coolLeft {
+    if (_coolUntil == null) return 0;
+    return _coolUntil!
+        .difference(DateTime.now())
+        .inSeconds
+        .clamp(0, 60);
+  }
 
   @override
   void dispose() {
     _nick.dispose();
     _pass.dispose();
     _pass2.dispose();
+    _coolTimer?.cancel();
     super.dispose();
+  }
+
+  void _startCooldown() {
+    _coolUntil =
+        DateTime.now().add(const Duration(seconds: 60));
+    _coolTimer?.cancel();
+    _coolTimer = Timer.periodic(
+        const Duration(seconds: 1), (t) {
+      if (!mounted || _coolLeft <= 0) {
+        t.cancel();
+        if (mounted) setState(() {});
+      } else if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _submit() async {
     final st = context.read<AppState>();
+    if (_coolLeft > 0) {
+      showError(context, 'Подожди $_coolLeft c. (лимит попыток)');
+      return;
+    }
     final nick = _nick.text.trim();
     final pass = _pass.text;
     if (nick.isEmpty || pass.isEmpty) {
@@ -45,7 +77,10 @@ class _AuthScreenState extends State<AuthScreen>
     final ok = _isLogin
         ? await st.doLogin(nick, pass)
         : await st.doRegister(nick, pass);
-    if (!ok && mounted) showError(context, st.lastError);
+    if (!ok && mounted) {
+      showError(context, st.lastError);
+      if ((st.lastError ?? '').contains('429')) _startCooldown();
+    }
   }
 
   @override
@@ -162,14 +197,17 @@ class _AuthScreenState extends State<AuthScreen>
                         GradientButton(
                           label: st.busy
                               ? 'Загрузка...'
-                              : (_isLogin
-                                  ? 'Войти'
-                                  : 'Зарегистрироваться'),
+                              : (_coolLeft > 0
+                                  ? 'Подожди $_coolLeft c.'
+                                  : (_isLogin
+                                      ? 'Войти'
+                                      : 'Зарегистрироваться')),
                           icon: _isLogin
                               ? Icons.login_rounded
                               : Icons.person_add_rounded,
-                          onPressed:
-                              st.busy ? null : _submit,
+                          onPressed: (st.busy || _coolLeft > 0)
+                              ? null
+                              : _submit,
                         ),
                         const SizedBox(height: 8),
                         Text(

@@ -54,6 +54,12 @@ class SupabaseBackend implements GameBackend {
 
   NeverWinException _err(Object e) {
     final m = e.toString();
+    if (m.contains('over_email_send_rate_limit') ||
+        m.contains('email rate limit')) {
+      return const NeverWinException(
+          'Лимит отправки писем (429). Подожди минуту. Администратору: выключи '
+          'Confirm email (Dashboard → Authentication → Providers → Email).');
+    }
     if (m.contains('429') ||
         m.contains('rate limit') ||
         m.contains('Rate limit') ||
