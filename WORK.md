@@ -375,3 +375,46 @@ CI-прогон `NeverWin APK` run 36323103992 (тег v0.1.1): job `Analyze + t
 ### Результат
 - Ожидается повторный прогон workflow после push (тег v0.1.1 переставлен на
   новый HEAD, т.к. триггер релиза — push тега).
+
+---
+
+## AGENT 1: 27.09.2026, 22:50, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Второй прогон (run 36324181860) снова упал на `flutter analyze`, хотя все 62
+ошибки были исправлены. Диагностика по логу показала **1 оставшуюся info**:
+`dangling_library_doc_comments` (lib/models.dart:1:1) — `flutter analyze` в CI
+считает фатальными даже infos. Исправлено, третий прогон — **success**,
+**Release 0.1.1 с `NeverWin.apk` опубликован**.
+
+### Реализация
+- Лог job 108633631893: `1 issue found. (ran in 8.8s)` → exit code 1.
+  Причина: висячий `///`-комментарий в шапке `models.dart` (файл без импортов,
+  комментарий ни к чему не привязан). Заменён на `//` (без смены смысла).
+- Коммит `7d2c63a`, тег `v0.1.1` переставлен (forced), push main + tag.
+- Run 36337704591: `completed / success` — analyze ✓, tests ✓
+  (`test/widget_test.dart`: 4 игры, мин. ставки, зелёный < 8%), build
+  `apk --release --build-name 0.1.1` ✓, job release ✓.
+- Проверка Release API: `NeverWin 0.1.1` (tag v0.1.1, не draft), ассет
+  **`NeverWin.apk` — 55 944 612 байт**, скачивание:
+  `https://github.com/leqwiss18serv-cloud/NeverWin/releases/download/v0.1.1/NeverWin.apk`.
+
+### Файлы
+- Изменены: `lib/models.dart` (2 строки комментария), `WORK.md`.
+
+### SQL
+- Без изменений. Напоминание: `supabase/schema.sql` однократно выполнить в
+  Dashboard → SQL Editor проекта `ditgqxuliroodvfnlshl` (удалённо применить
+  нечем: нужен PAT владельца или пароль БД). После этого приложение на
+  следующем запуске само переключится с локального режима на Supabase
+  (диагностика: Auth жив — GoTrue v2.197.0; `game_config` сейчас 404, т.е.
+  схема не применена). Secret-ключ в репозитории нигде не хранится.
+
+### Результат
+- Этап «Часть 1» завершён end-to-end: код → push → зелёный CI → Release 0.1.1
+  + рабочий APK. Архитектура (GameBackend, game_config, votes-jsonb, модульные
+  экраны) готова к части 2 с глобальными функциями.
+
+### Публикация
+- Push main + v0.1.1: OK (коммит `7d2c63a`).
+- Release **0.1.1** + **`NeverWin.apk`**: опубликовано, проверено через API.
