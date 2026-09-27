@@ -223,3 +223,27 @@
    альтернатива — ручной запуск workflow (`workflow_dispatch`, `release: true`).
 4. Supabase: после resume paused-проекта применить `supabase/schema.sql`,
    URL + anon key ввести в Настройки → Сервер.
+
+---
+
+## AGENT 1: 27.09.2026, 18:15, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Уточнение владельца: аккаунт **`leqwiss18serv`** (не `leqwiss44-debug`).
+Remote переключён на `https://github.com/leqwiss18serv/NeverWin.git`.
+Поиск «скинутого» токена: проверка `leqwiss18serv/NeverWin` через API → **404**
+(репозитория пока нет); в Telegram (Saved Messages + 25 диалогов + серверный
+поиск) токена нет; в Gmail (`ghp_` по всем письмам) — 0 совпадений; единственный
+файл `github_token.txt` (40 симв., 26.08.2026) даёт **401** на `api.github.com/user`.
+Рабочего токена в доступных хранилищах нет — запрошен у пользователя.
+
+### Файлы
+- Изменён remote внутреннего репозитория (локальная операция, без push).
+- `WORK.md` — эта запись.
+
+### Результат / Публикация
+- Блокер прежний: без валидного PAT создать `leqwiss18serv/NeverWin`,
+  запушить коммиты + тег `v0.1.1` и запустить Actions невозможно.
+  Как только пользователь передаст токен: verify (`/user` → `leqwiss18serv`) →
+  `POST /user/repos` (NeverWin, public) → push main + tags → контроль прогона
+  workflow → проверка Release 0.1.1 + `NeverWin.apk`.
