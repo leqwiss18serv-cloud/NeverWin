@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../backend/game_backend.dart';
 import '../backend/local_backend.dart';
 import '../backend/supabase_backend.dart';
+import '../backend/supabase_config.dart';
 import '../models.dart';
 
 /// Global app state: session, backend selection, config, notices, banners.
@@ -41,6 +42,17 @@ class AppState extends ChangeNotifier {
     if (url != null && key != null && url.isNotEmpty && key.isNotEmpty) {
       try {
         await SupabaseBackend.init(url, key);
+        _backend = SupabaseBackend.instance;
+      } catch (_) {
+        _backend = LocalBackend();
+      }
+    } else {
+      // Compiled-in project defaults (publishable key — client-safe).
+      // If the schema isn't applied yet or there's no network, stay local.
+      try {
+        await SupabaseBackend.init(
+            SupabaseDefaults.url, SupabaseDefaults.publishableKey);
+        await SupabaseBackend.instance.getConfig();
         _backend = SupabaseBackend.instance;
       } catch (_) {
         _backend = LocalBackend();
