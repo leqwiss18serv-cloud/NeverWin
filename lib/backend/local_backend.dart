@@ -141,8 +141,8 @@ class LocalBackend implements GameBackend {
           throw const NeverWinException(
               'Никнейм: только латиница, цифры и _');
         }
-        if (password.length < 4) {
-          throw const NeverWinException('Пароль: минимум 4 символа');
+        if (password.length < 6) {
+          throw const NeverWinException('Пароль: минимум 6 символов');
         }
         final users = _decodeMap(p.getString(_kUsers));
         if (users.containsKey(nickname)) {

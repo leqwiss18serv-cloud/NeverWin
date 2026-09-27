@@ -557,6 +557,70 @@ tests ✓, build ✓, release ✓. Release API: ассет `NeverWin.apk` обн
 ### Результат
 - Актуальный APK (с маппингом email-лимита и 60-секундным cooldown) в
   Release 0.1.1. Четыре зелёных прогона подряд.
+
+---
+
+## AGENT 1: 28.09.2026, 00:10, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Команда «пофикси все баги»: полный аудит кода + CI-логов. Найдено и исправлено
+11 дефектов (2 критических серверных, остальное клиент).
+
+### Реализация
+**SQL (критика):**
+1. RLS полностью запрещал чтения — списки счетов/друзей/сообщений/дуэлей/
+   уведомлений на Supabase возвращали **пусто**, лидерборд считал без счетов,
+   отправка сообщений падала. Добавлены точечные политики: свои строки на
+   select (`bank_own_read`, `fr_own_read`, `msg_own_read`, `duel_own_read`,
+   `notice_own_read`), `msg_send` (insert только от себя другу с проверкой
+   дружбы EXISTS), `notice_mark_read` (update своих). Деньги по-прежнему
+   только через RPC.
+2. `profiles`: чтение сужено до своих строк (раньше любой видел чужие
+   балансы; никнеймы отдаются через definer-RPC).
+3. `nw_duel_create`: **unreachable-код** — `insert notices` стоял ПОСЛЕ
+   `RETURN QUERY` и никогда не выполнялся (вызванный не получал уведомление).
+   Переписан: insert → returning id → notice → `return query ... where id`.
+4. Лидерборд: view под RLS врёт (чужие счета скрыты) → новый definer-RPC
+   `nw_leaderboard()` (топ-10 main+Σ); клиент переведён на него.
+5. Storage-бакет `chat-images` (public read, upload своим) + политики; в
+   схему добавлен блок обязательных Dashboard-настроек (Confirm email OFF,
+   Rate Limits, Realtime-репликация) — SQL этого не покрывает.
+6. Создан `supabase/migration_02.sql` для живых БД (все 5 пунктов выше
+   отдельными идемпотентными блоками; свежие проекты — только schema.sql).
+
+**Клиент:**
+7. `refreshAll()` занулял профиль при сетевом blip → мгновенный «разлогин»
+   в UI. Теперь профиль обновляется только на не-null.
+8. `ChatPage`: подписка `watchMessages` не отменялась в dispose (вечный
+   polling после закрытия чата) → `StreamSubscription` + cancel.
+9. Переводы не показывались сверху экрана (только во вкладке): poll в
+   `_startFeeds` теперь поднимает верхним баннером первое новое непрочитанное
+   уведомление (baseline без спама старых).
+10. `_err()`: 38 точных RU-маппингов всех кодов RPC/Auth + парсинг
+    `min_bet_<N>` в сумму (было «Ошибка сервера: promo_used» и т.п.).
+11. Валидация входа: пароль минимум 6 (требование GoTrue; локальный бэкенд
+    подтянут с 4 до 6), ник по regex до запроса (мгновенный фидбек, экономия
+    попыток под лимитом).
+12. Фото в чате на Supabase: upload в `chat-images` → публичный URL
+    собеседнику (раньше слался локальный путь, второй клиент видел битую
+    картинку); fallback — как есть.
+13. Дуэли: кнопка «Предложить свою игру и ставку» (контр-вызов — голосование
+    обеих сторон: decline + встречный challenge).
+
+### Файлы
+- Изменены: `supabase/schema.sql`, `lib/backend/supabase_backend.dart`
+  (leaderboard-RPC, _err, Storage-upload), `lib/state/app_state.dart`
+  (refreshAll, баннер уведомлений), `lib/screens/friends_screen.dart`
+  (подписка, контр-дуэль), `lib/screens/auth_screen.dart` (валидация),
+  `lib/backend/local_backend.dart` (пароль 6), `WORK.md`.
+- Создан: `supabase/migration_02.sql`.
+
+### SQL
+- См. выше (schema.sql + migration_02.sql). Пользователю: если schema.sql уже
+  применялась — выполнить `migration_02.sql`; плюс Dashboard-шаги из схемы.
+
+### Результат
+- Коммит едет в main + тег v0.1.1 → контроль CI и Release.
 - Для полного снятия 429 пользователю осталось одно действие в Dashboard:
   **Authentication → Providers → Email → Confirm email = OFF**
   (первопричина доказана тестом: `over_email_send_rate_limit`, 0 юзеров

@@ -74,9 +74,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  String? _lastNoticeId; // чтобы показывать баннер только о новых
+
   void _startFeeds() {
     _globalSub?.cancel();
     _poll?.cancel();
+    // baseline: старые непрочитанные баннером не спамим
+    _lastNoticeId = notices.isNotEmpty ? notices.first.id : null;
     _globalSub = _backend.watchGlobal().listen((g) {
       if (!notifEnabled) return;
       banner = g;
@@ -103,6 +107,15 @@ class AppState extends ChangeNotifier {
       }
       final n = await _safe(() => _backend.notices());
       if (n != null) {
+        // Новое непрочитанное уведомление (перевод/друзья/дуэль) —
+        // верхним баннером, как требует spec для переводов.
+        final fresh = n.where((x) => !x.read).toList();
+        if (fresh.isNotEmpty && fresh.first.id != _lastNoticeId) {
+          _lastNoticeId = fresh.first.id;
+          if (notifEnabled && banner == null) {
+            showLocalBanner(fresh.first.text);
+          }
+        }
         notices = n;
         notifyListeners();
       }
@@ -158,7 +171,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refreshAll() async {
-    profile = await _safe(() => _backend.currentSession());
+    // Не зануляем профиль при сетевом сбое — иначе один blip разлогинит UI.
+    final np = await _safe(() => _backend.currentSession());
+    if (np != null) profile = np;
     final c = await _safe(() => _backend.getConfig());
     if (c != null) config = c;
     final n = await _safe(() => _backend.notices());

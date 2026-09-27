@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -157,8 +158,70 @@ class _FriendsScreenState extends State<FriendsScreen>
     }
   }
 
-  Future<void> _respondDuel(DuelInfo d, bool accept) async {
+  /// Контр-предложение: отклонить входящую дуэль и вызвать в ответ
+  /// со своей игрой/ставкой (голосование за игру обеими сторонами).
+  Future<void> _counterDuel(DuelInfo d) async {
+    final game = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Твоя игра для встречной дуэли'),
+        children: [
+          for (final g in GameDefs.all)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, g.id),
+              child: Text('${g.emoji} ${g.title}'),
+            ),
+        ],
+      ),
+    );
+    if (game == null || !mounted) return;
+    final betC = TextEditingController();
+    final bet = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Твоя ставка (одинаковая для обоих)'),
+        content: TextField(
+            controller: betC,
+            keyboardType: TextInputType.number,
+            decoration:
+                const InputDecoration(labelText: 'Ставка NC')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(
+                  ctx, int.tryParse(betC.text.trim()) ?? 0),
+              child: const Text('Предложить')),
+        ],
+      ),
+    );
+    if (bet == null || bet <= 0 || !mounted) return;
     final st = context.read<AppState>();
+    final otherId = d.challengerId == st.profile?.id
+        ? d.opponentId
+        : d.challengerId;
+    final otherNick = d.challengerId == st.profile?.id
+        ? d.opponentNickname
+        : d.challengerNickname;
+    final ok = await st.run(() async {
+      if (d.status == 'pending' && d.opponentId == st.profile?.id) {
+        await st.backend.respondDuel(d.id, false);
+      }
+      await st.backend.challengeDuel(otherId, game, bet);
+      _duels = await st.backend.myDuels();
+      await st.refreshAll();
+    });
+    if (!mounted) return;
+    if (ok) {
+      showOk(context, 'Встречная дуэль отправлена ($otherNick)!');
+      setState(() {});
+    } else {
+      showError(context, st.lastError);
+    }
+  }
+
+  Future<void> _respondDuel(DuelInfo d, bool accept) async {    final st = context.read<AppState>();
     final ok = await st.run(() async {
       await st.backend.respondDuel(d.id, accept);
       _duels = await st.backend.myDuels();
@@ -398,6 +461,13 @@ class _FriendsScreenState extends State<FriendsScreen>
                         ),
                       ],
                     ),
+                    TextButton(
+                      onPressed: () => _counterDuel(d),
+                      child: const Text(
+                          '↩ Предложить свою игру и ставку',
+                          style: TextStyle(
+                              color: NeverWinTheme.iceCyan)),
+                    ),
                   ],
                   if (d.status == 'pending' &&
                       d.challengerId == me)
@@ -486,12 +556,13 @@ class _ChatPageState extends State<ChatPage> {
   List<ChatMessage> _msgs = [];
   final _text = TextEditingController();
   final _scroll = ScrollController();
+  StreamSubscription<List<ChatMessage>>? _sub;
 
   @override
   void initState() {
     super.initState();
     _load();
-    context
+    _sub = context
         .read<AppState>()
         .backend
         .watchMessages(widget.friend.userId)
@@ -504,6 +575,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _sub?.cancel();
     _text.dispose();
     _scroll.dispose();
     super.dispose();

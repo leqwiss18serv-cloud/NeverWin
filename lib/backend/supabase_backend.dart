@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -54,38 +55,64 @@ class SupabaseBackend implements GameBackend {
 
   NeverWinException _err(Object e) {
     final m = e.toString();
-    if (m.contains('over_email_send_rate_limit') ||
-        m.contains('email rate limit')) {
-      return const NeverWinException(
-          'Лимит отправки писем (429). Подожди минуту. Администратору: выключи '
-          'Confirm email (Dashboard → Authentication → Providers → Email).');
+    const map = {
+      'over_email_send_rate_limit': 'Лимит отправки писем (429). Подожди минуту. Администратору: выключи Confirm email (Dashboard → Authentication → Providers → Email).',
+      'email rate limit': 'Лимит отправки писем (429). Подожди минуту. Администратору: выключи Confirm email (Dashboard → Authentication → Providers → Email).',
+      'already registered': 'Этот ник уже зарегистрирован. Войди в аккаунт.',
+      'already been registered': 'Этот ник уже зарегистрирован. Войди в аккаунт.',
+      'nickname_taken': 'Никнейм уже занят',
+      'user_not_found': 'Игрок не найден',
+      'no_profile': 'Профиль не найден',
+      'not_authenticated': 'Нет сессии. Войди заново.',
+      'blocked': 'Аккаунт заблокирован',
+      'insufficient': 'Недостаточно NC',
+      'bad_bet': 'Некорректная ставка',
+      'bad_amount': 'Некорректная сумма',
+      'bad_choice': 'Неверный выбор',
+      'bad_name': 'Некорректное название счёта',
+      'bad_pin': 'Пароль счёта — ровно 4 цифры',
+      'bad_target': 'ID счёта — 6 цифр',
+      'bad_text': 'Сообщение: 1–200 символов',
+      'unknown_game': 'Неизвестная игра',
+      'unknown_param': 'Неизвестный параметр',
+      'no_account': 'Счёт не найден',
+      'target_not_found': 'Счёт получателя не найден',
+      'same_account': 'Нельзя перевести на тот же счёт',
+      'account_limit': 'Достигнут лимит счетов',
+      'transfer_limit': 'Превышен лимит перевода',
+      'self_request': 'Нельзя добавить себя',
+      'already_exists': 'Уже в друзьях или заявка отправлена',
+      'request_not_found': 'Заявка не найдена',
+      'not_friends': 'Дуэли — только с друзьями',
+      'not_your_duel': 'Не твоя дуэль',
+      'duel_not_found': 'Дуэль не найдена',
+      'promo_not_found': 'Промокод не найден',
+      'promo_inactive': 'Промокод неактивен',
+      'promo_expired': 'Срок действия промокода истёк',
+      'promo_exhausted': 'Лимит активаций промокода исчерпан',
+      'promo_used': 'Ты уже использовал этот промокод',
+      'promo_min_balance': 'Недостаточный баланс для этого промокода',
+      'not_admin': 'Нет прав администратора',
+    };
+    for (final entry in map.entries) {
+      if (m.contains(entry.key)) {
+        return NeverWinException(entry.value);
+      }
+    }
+    final minBet = RegExp(r'min_bet_(\d+)').firstMatch(m);
+    if (minBet != null) {
+      return NeverWinException(
+          'Минимальная ставка: ${minBet.group(1)} NC');
     }
     if (m.contains('429') ||
         m.contains('rate limit') ||
         m.contains('Rate limit') ||
-        m.contains('over_request_rate_limit') ||
-        m.contains('email rate limit')) {
+        m.contains('over_request_rate_limit')) {
       return const NeverWinException(
           'Слишком много попыток (лимит 429). Подожди ~1 минуту и попробуй снова.');
     }
-    if (m.contains('already registered') ||
-        m.contains('already been registered')) {
-      return const NeverWinException(
-          'Этот ник уже зарегистрирован. Войди в аккаунт.');
-    }
-    if (m.contains('nickname_taken')) {
-      return const NeverWinException('Никнейм уже занят');
-    }
-    if (m.contains('blocked')) return const NeverWinException('Аккаунт заблокирован');
-    if (m.contains('insufficient')) {
-      return const NeverWinException('Недостаточно NC');
-    }
-    if (m.contains('min_bet')) return const NeverWinException('Ставка ниже минимальной');
     if (m.contains('cooldown')) {
       return const NeverWinException('Cooldown: подожди 10 c.');
-    }
-    if (m.contains('not_admin')) {
-      return const NeverWinException('Нет прав администратора');
     }
     return NeverWinException('Ошибка сервера: ${m.split('\n').first}');
   }
@@ -273,10 +300,12 @@ class SupabaseBackend implements GameBackend {
 
   @override
   Future<List<LeaderRow>> leaderboard() async {
-    final rows = await _db.from('v_leaderboard').select().limit(10) as List;
+    // Честные итоги (main + Σ счетов) считает definer-RPC: view под RLS
+    // скрыл бы чужие счета и занизил бы итоги.
+    final rows = await _db.rpc('nw_leaderboard') as List;
     return rows
-        .map((r) => LeaderRow(
-            (r['nickname'] ?? '') as String, ((r['total_nc'] ?? 0) as int)))
+        .map((r) => LeaderRow((r['nickname'] ?? '') as String,
+            (r['total_nc'] as num? ?? 0).toInt()))
         .toList();
   }
 
@@ -348,10 +377,25 @@ class SupabaseBackend implements GameBackend {
   @override
   Future<void> sendMessage(String friendUserId, String text,
       {String? imagePath}) async {
+    // Фото грузим в Storage-бакет chat-images и шлём публичный URL, чтобы
+    // картинку видел и второй клиент. При ошибке — fallback как есть.
+    String? remoteUrl;
+    if (imagePath != null && !imagePath.startsWith('http')) {
+      try {
+        final name =
+            '${_db.auth.currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await _db.storage.from('chat-images').upload(name, File(imagePath));
+        remoteUrl = _db.storage.from('chat-images').getPublicUrl(name);
+      } catch (_) {
+        remoteUrl = null;
+      }
+    } else {
+      remoteUrl = imagePath;
+    }
     await _db.from('messages').insert({
       'to_user': friendUserId,
       'text': text.trim(),
-      'image_url': imagePath,
+      'image_url': remoteUrl ?? imagePath,
     });
   }
 

@@ -174,7 +174,10 @@ create table if not exists public.game_history (
   created_at timestamptz not null default now()
 );
 
--- ---------- leaderboard view ----------
+-- ---------- leaderboard view (для Dashboard) + RPC (для клиента) ----------
+-- Внимание: view под RLS отдаст клиенту только main_balance (чужие счета
+-- скрыты), поэтому клиент ходит в SECURITY DEFINER RPC nw_leaderboard,
+-- который считает честные итоги main + Σ счетов.
 create or replace view public.v_leaderboard as
 select p.nickname,
        p.main_balance + coalesce(sum(b.balance), 0)::bigint as total_nc
@@ -182,6 +185,18 @@ from public.profiles p
 left join public.bank_accounts b on b.owner_id = p.id
 group by p.id, p.nickname, p.main_balance
 order by total_nc desc;
+
+create or replace function public.nw_leaderboard()
+returns table(nickname text, total_nc bigint)
+language sql security definer set search_path = public as $$
+  select p.nickname,
+         p.main_balance + coalesce(sum(b.balance), 0)::bigint
+  from public.profiles p
+  left join public.bank_accounts b on b.owner_id = p.id
+  group by p.id, p.nickname, p.main_balance
+  order by 2 desc
+  limit 10;
+$$;
 
 -- =====================================================================
 -- RLS: всё закрыто по умолчанию, клиент ходит только через RPC.
@@ -198,17 +213,66 @@ alter table public.notices          enable row level security;
 alter table public.global_messages  enable row level security;
 alter table public.game_history     enable row level security;
 
--- чтение конфига и лидерборда — всем аутентифицированным
+-- чтение конфига и глобальных — всем аутентифицированным;
+-- остальное чтение — СТРОГО свои строки (списки счетов/друзей/сообщений/
+-- дуэлей/уведомлений нужны клиенту напрямую). Деньги и исходы двигаются
+-- ТОЛЬКО через SECURITY DEFINER RPC (прямых insert/update/delete денег нет).
 drop policy if exists cfg_read on public.game_config;
 create policy cfg_read on public.game_config for select to authenticated using (true);
+
+-- profiles: только свой профиль (чужие никнеймы клиент получает через
+-- definer-RPC: nw_friends, уведомления, дуэли, лидерборд)
 drop policy if exists prof_read on public.profiles;
-create policy prof_read on public.profiles for select to authenticated using (true);
--- чтение своих счетов / входящих переводов получателю не нужно: всё через RPC
--- глобальные сообщения читают все
+create policy prof_read on public.profiles
+  for select to authenticated using (auth.uid() = id);
+
 drop policy if exists gm_read on public.global_messages;
 create policy gm_read on public.global_messages for select to authenticated using (true);
--- прямые insert/update/delete клиента запрещены (политик нет = deny).
--- profiles создаются только триггером/RPC (service_role / security definer).
+
+-- bank_accounts: свои счета на чтение (записи — только RPC)
+drop policy if exists bank_own_read on public.bank_accounts;
+create policy bank_own_read on public.bank_accounts
+  for select to authenticated using (auth.uid() = owner_id);
+
+-- friendships: свои заявки (отправитель и получатель)
+drop policy if exists fr_own_read on public.friendships;
+create policy fr_own_read on public.friendships
+  for select to authenticated
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+-- messages: своя переписка на чтение; отправка только от себя другу
+-- (дружба проверяется в политике); историю менять/удалять нельзя
+drop policy if exists msg_own_read on public.messages;
+create policy msg_own_read on public.messages
+  for select to authenticated
+  using (auth.uid() = from_user or auth.uid() = to_user);
+drop policy if exists msg_send on public.messages;
+create policy msg_send on public.messages
+  for insert to authenticated
+  with check (
+    auth.uid() = from_user and exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted' and (
+        (f.requester_id = auth.uid() and f.addressee_id = to_user) or
+        (f.requester_id = to_user and f.addressee_id = auth.uid()))));
+
+-- duels: свои дуэли на чтение (создание/резолв — только RPC)
+drop policy if exists duel_own_read on public.duels;
+create policy duel_own_read on public.duels
+  for select to authenticated
+  using (auth.uid() = challenger_id or auth.uid() = opponent_id);
+
+-- notices: свои уведомления на чтение + пометка прочитанным
+drop policy if exists notice_own_read on public.notices;
+create policy notice_own_read on public.notices
+  for select to authenticated using (auth.uid() = to_user);
+drop policy if exists notice_mark_read on public.notices;
+create policy notice_mark_read on public.notices
+  for update to authenticated
+  using (auth.uid() = to_user) with check (auth.uid() = to_user);
+
+-- прямые insert/update/delete клиента сверх описанного запрещены
+-- (политик нет = deny). profiles создаются только RPC (security definer).
 
 -- =====================================================================
 -- Helpers
@@ -545,7 +609,7 @@ end $$;
 create or replace function public.nw_duel_create(p_opponent uuid, p_game text, p_bet bigint)
 returns setof public.duels
 language plpgsql security definer set search_path = public as $$
-declare v_uid uuid := auth.uid(); v_me text; v_opp text; v_min bigint;
+declare v_uid uuid := auth.uid(); v_me text; v_opp text; v_min bigint; v_did uuid;
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   perform public.nw_assert_open(v_uid);
@@ -560,11 +624,13 @@ begin
   if v_min <= 0 then raise exception 'unknown_game'; end if;
   if p_bet < v_min then raise exception 'min_bet_%', v_min; end if;
   select nickname into v_me from public.profiles where id = v_uid;
-  return query insert into public.duels(challenger_id, challenger_nick, opponent_id, opponent_nick, game_id, bet, votes)
+  -- ВАЖНО: notice вставляется ДО return (код после RETURN QUERY недостижим).
+  insert into public.duels(challenger_id, challenger_nick, opponent_id, opponent_nick, game_id, bet, votes)
     values (v_uid, v_me, p_opponent, v_opp, p_game, p_bet, jsonb_build_object('challenger', p_game))
-    returning *;
+    returning id into v_did;
   insert into public.notices(to_user, kind, text)
   values (p_opponent, 'duel', v_me||' вызывает тебя на дуэль: '||p_game||', ставка '||p_bet||' NC.');
+  return query select * from public.duels where id = v_did;
 end $$;
 
 create or replace function public.nw_duel_respond(p_id uuid, p_accept boolean)
@@ -691,6 +757,30 @@ begin
   update public.game_config set value = p_value where key = p_key;
   if not found then raise exception 'unknown_param'; end if;
 end $$;
+
+-- =====================================================================
+-- CHAT IMAGES bucket (фото в мессенджере; public read, upload — своим)
+-- =====================================================================
+insert into storage.buckets(id, name, public)
+values ('chat-images', 'chat-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists chat_img_read on storage.objects;
+create policy chat_img_read on storage.objects
+  for select to authenticated using (bucket_id = 'chat-images');
+drop policy if exists chat_img_upload on storage.objects;
+create policy chat_img_upload on storage.objects
+  for insert to authenticated with check (bucket_id = 'chat-images');
+
+-- =====================================================================
+-- DASHBOARD (не покрывается SQL, настроить вручную один раз):
+-- 1. Authentication → Providers → Email → Confirm email = OFF
+--    (адреса nick@neverwin.local фейковые; иначе signup 429
+--    over_email_send_rate_limit и вход по неподтверждённым email невозможен).
+-- 2. (Опционально) Authentication → Rate Limits — поднять signup-лимит.
+-- 3. Realtime: включить репликацию для таблиц messages, global_messages,
+--    notices (Database → Replication) — иначе Realtime-подписки молчат.
+-- =====================================================================
 
 -- =====================================================================
 -- ADMIN via SQL (выполнять вручную в SQL Editor):

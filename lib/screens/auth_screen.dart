@@ -64,6 +64,14 @@ class _AuthScreenState extends State<AuthScreen>
       showError(context, 'Подожди $_coolLeft c. (лимит попыток)');
       return;
     }
+    if (!RegExp(r'^[A-Za-z0-9_]{3,20}$').hasMatch(nick)) {
+      showError(context, 'Никнейм: 3–20 символов, латиница/цифры/_');
+      return;
+    }
+    if (pass.length < 6) {
+      showError(context, 'Пароль: минимум 6 символов');
+      return;
+    }
     final nick = _nick.text.trim();
     final pass = _pass.text;
     if (nick.isEmpty || pass.isEmpty) {
