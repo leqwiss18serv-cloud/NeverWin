@@ -60,8 +60,14 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _submit() async {
     final st = context.read<AppState>();
+    final nick = _nick.text.trim();
+    final pass = _pass.text;
     if (_coolLeft > 0) {
       showError(context, 'Подожди $_coolLeft c. (лимит попыток)');
+      return;
+    }
+    if (nick.isEmpty || pass.isEmpty) {
+      showError(context, 'Заполни никнейм и пароль');
       return;
     }
     if (!RegExp(r'^[A-Za-z0-9_]{3,20}$').hasMatch(nick)) {
@@ -70,12 +76,6 @@ class _AuthScreenState extends State<AuthScreen>
     }
     if (pass.length < 6) {
       showError(context, 'Пароль: минимум 6 символов');
-      return;
-    }
-    final nick = _nick.text.trim();
-    final pass = _pass.text;
-    if (nick.isEmpty || pass.isEmpty) {
-      showError(context, 'Заполни никнейм и пароль');
       return;
     }
     if (!_isLogin && pass != _pass2.text) {
