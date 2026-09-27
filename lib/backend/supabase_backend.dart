@@ -54,6 +54,19 @@ class SupabaseBackend implements GameBackend {
 
   NeverWinException _err(Object e) {
     final m = e.toString();
+    if (m.contains('429') ||
+        m.contains('rate limit') ||
+        m.contains('Rate limit') ||
+        m.contains('over_request_rate_limit') ||
+        m.contains('email rate limit')) {
+      return const NeverWinException(
+          'Слишком много попыток (лимит 429). Подожди ~1 минуту и попробуй снова.');
+    }
+    if (m.contains('already registered') ||
+        m.contains('already been registered')) {
+      return const NeverWinException(
+          'Этот ник уже зарегистрирован. Войди в аккаунт.');
+    }
     if (m.contains('nickname_taken')) {
       return const NeverWinException('Никнейм уже занят');
     }
@@ -97,7 +110,20 @@ class SupabaseBackend implements GameBackend {
     try {
       await _db.auth.signInWithPassword(
           email: _email(nickname), password: password);
-      final me = await currentSession();
+      var me = await currentSession();
+      if (me == null) {
+        // Self-heal: auth-запись есть, а строки профиля нет
+        // (прерванная регистрация) — создаём профиль и перечитываем.
+        try {
+          final fallbackNick =
+              _db.auth.currentUser?.email?.split('@').first ?? nickname;
+          final row = await _db.rpc('nw_ensure_profile',
+              params: {'p_nickname': fallbackNick}) as List;
+          if (row.isNotEmpty) {
+            me = _profile(Map<String, dynamic>.from(row.first as Map));
+          }
+        } catch (_) {}
+      }
       if (me == null) throw const NeverWinException('Вход не удался');
       if (me.isBlocked) {
         await _db.auth.signOut();
