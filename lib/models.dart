@@ -1,5 +1,5 @@
-/// Shared data models for NeverWin. Backend-agnostic: both the local
-/// demo backend and the Supabase backend map to these classes.
+// Shared data models for NeverWin. Backend-agnostic: both the local
+// demo backend and the Supabase backend map to these classes.
 
 class PlayerProfile {
   final String id;
