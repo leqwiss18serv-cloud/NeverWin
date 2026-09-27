@@ -163,3 +163,63 @@
 ---
 
 ## (следующие записи AGENT 1 / AGENT 2 — ниже, новые сверху не требуются, дописывать в конец)
+
+---
+
+## AGENT 1: 27.09.2026, 18:02, UTC+5 (Ekaterinburg Standard Time)
+
+### Изменение
+Финализация этапа: исправлены замечания код-ревью, добавлен CI, создан
+изолированный git-репозиторий NeverWin, сделаны коммит и тег; зафиксирован
+статус публикации.
+
+### Реализация
+- Исправлено по итогам самопроверки: `home_shell` (`clamp(...).toInt()`),
+  добавлен `AppState.poke()` вместо прямого `notifyListeners()` из виджета,
+  убрана неиспользуемая переменная в `_resolveDuel`, исходящие заявки показывают
+  никнейм (`FriendRequest.toNickname`).
+- **Важно:** PostgREST возвращает `SETOF`-RPC массивом — в `SupabaseBackend`
+  добавлен нормализатор `_firstRow()` (List/Map → row); применён в
+  `nw_bank_create/deposit/withdraw`, `nw_duel_create/respond`;
+  `nw_redeem_promo` кастуется через `(res as num).toInt()`.
+- `.gitignore`: добавлены `android/local.properties`, `/Bruce/`, `/Scripts/`,
+  `/tool/` (чужие/локальные данные не должны попасть в репозиторий игры).
+- Создан **отдельный** git-репозиторий в `Documents/Default Project`
+  (ветка `main`), чтобы не смешивать NeverWin с домашним репозиторием
+  (`Render-obrabotchik`) и не затрагивать работу AGENT 2.
+- Коммит `e76ab15` (47 файлов, +7835): «feat: NeverWin 0.1.1 — ...».
+  Тег **`v0.1.1`** создан локально.
+- Remote настроен: `origin → https://github.com/leqwiss44-debug/NeverWin.git`.
+- Проверено: `GET api.github.com/repos/leqwiss44-debug/NeverWin` → **404**
+  (репозитория ещё нет); сохранённый GitHub PAT → **401** (недействителен),
+  создать репозиторий/запушить из песочницы невозможно; `git ls-remote/push`
+  sandbox принудительно завершает (ChildProcess.kill).
+
+### Файлы
+- Изменены: `lib/screens/home_shell.dart`, `lib/state/app_state.dart`,
+  `lib/screens/settings_screen.dart`, `lib/backend/local_backend.dart`,
+  `lib/models.dart`, `lib/backend/supabase_backend.dart`,
+  `lib/screens/friends_screen.dart`, `.gitignore`, `WORK.md`.
+- Созданы: `.github/workflows/android-apk.yml` (уже в коммите e76ab15),
+  `.git/` (новый репозиторий), тег `v0.1.1`.
+
+### SQL
+- Без изменений (схема `supabase/schema.sql` уже в коммите).
+
+### Результат
+- Локально: коммит + тег готовы. CI (`analyze → test → build apk --release →
+  Release 0.1.1 + NeverWin.apk`) запустится автоматически после push тега.
+- Локальные `flutter analyze/test/build` в песочнице зависают/убиваются —
+  проверка кода переносится в Actions (первый зелёный прогон покажет все
+  ошибки компиляции, если что-то пропущено при ручной ревизии).
+
+### Публикация (требует действий пользователя — токен протух)
+1. Обновить GitHub PAT (scratch `github_token.txt`, аккаунт `leqwiss44-debug`).
+2. Создать репозиторий и запушить:
+   `gh repo create leqwiss44-debug/NeverWin --public --source=. --remote=origin --push`
+   (выполнять в `Documents/Default Project`), затем
+   `git push origin main && git push origin v0.1.1`.
+3. Actions соберёт APK и создаст **Release 0.1.1** с файлом **NeverWin.apk**;
+   альтернатива — ручной запуск workflow (`workflow_dispatch`, `release: true`).
+4. Supabase: после resume paused-проекта применить `supabase/schema.sql`,
+   URL + anon key ввести в Настройки → Сервер.
